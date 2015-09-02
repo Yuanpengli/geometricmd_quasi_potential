@@ -1,7 +1,7 @@
 __author__ = 'liyuanpeng'
 
-from geometricmd.curve_shorten import compute_trajectory
-from geometricmd.geometry import Curve
+from geometricmd1.curve_shorten import compute_trajectory
+from geometricmd1.geometry import Curve
 from ase.io import read
 from ase.calculators.emt import EMT
 
