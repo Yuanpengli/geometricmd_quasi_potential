@@ -25,3 +25,4 @@ def g_function(point):
         g_matrix[2][i] = np.absolute(tan(point[i] ** (3)))
 
     return g_matrix
+

@@ -17,7 +17,31 @@ from numpy import *
 from scipy.optimize import fmin_l_bfgs_b
 
 #given a k(x) function, for example, k(x)=\sqrt{|sin(x^3+2x)|}
+def gradient_function(point,k_function,g_function):
+    dimension = len(point)
+    gradient = np.zeros(dimension)
+    k_vector = k_function(point)
+    g_matrix = g_function(point)
 
+
+
+   # print len(k_function(point))
+    #m,n=g_matrix.shape
+
+    for i in range(dimension):
+        gradient[i] = k_vector[i]
+
+        for j in range(3):
+            gradient[i] += math.sqrt(2.0*0.0001)*g_matrix[j][i]*np.random.normal(0, 0.001)
+
+    return gradient
+
+def compute_gradients(points, gradient_function,k_function,g_function):
+    gradients=[]
+    for point in points:
+        gradients.append(gradient_function(point,k_function,g_function))
+
+    return gradients
 
 #for a sequence of points in the local geodesic, compute the each k(points) as set
 def compute_x_ks(points, k_function):
@@ -25,6 +49,7 @@ def compute_x_ks(points, k_function):
     t = points[1]
     for point in points:
         x=np.subtract(point, t)
+        #print len(k_function(point))
         x_ks.append(np.subtract(x, k_function(point)))
         t = point
     return x_ks
@@ -120,7 +145,7 @@ def generate_points(x, start_point, end_point, rotation_matrix, total_number_of_
     return points
 
 
-def compute_metric(points, metric_function, Q_I_matrixs, x_k):
+def compute_metric(points, metric_function, Q_I_matrixs, x_k,gradients):
     """ Takes a list of NumPy arrays describing points molecular configurations, evaluates the metric at each point and
     returns a list of metric values at those points.
 
@@ -143,7 +168,8 @@ def compute_metric(points, metric_function, Q_I_matrixs, x_k):
     # For each point, compute the metric at that point
     i = 0
     for point in points:
-        metric.append(metric_function(point, Q_I_matrixs[i], x_k[i]))
+       # gradient=gradient_function(point,g_function,k_function)
+        metric.append(metric_function(point, Q_I_matrixs[i], x_k[i],gradients[i]))
         i += 1
         # print metric
     return metric
@@ -226,18 +252,19 @@ def length(x, start_point, end_point, mass_matrix, rotation_matrix, total_number
 
     Q_I_matrixs = compute_Q_I_matrix(points, Q_I_metric)
     x_ks = compute_x_ks(points,k_function)
+  #  print len(x_ks)
+    gradients=compute_gradients(points, gradient_function,k_function,g_function)
 
 
 
     # Pre-compute the metric values to minimise repeated metric evaluations
-    a = compute_metric(points, metric, Q_I_matrixs, x_ks)
+    a = compute_metric(points, metric, Q_I_matrixs, x_ks,gradients)
 
     # Compute quantities used to determine the length and gradient
     n = np.subtract(points[1], points[0])
     b = norm(n, mass_matrix)
     c = norm_gradient(n, mass_matrix)
-    u = np.add(a[1],a[0])
-   # u = np.asarray(u)
+    u = np.add(a[1][0],a[0][0])
 
     # Initialise the length with the trapezoidal approximation of the first line segments length
     l = u * b
@@ -250,27 +277,20 @@ def length(x, start_point, end_point, mass_matrix, rotation_matrix, total_number
         n = np.subtract(points[i+1], points[i])
         d = norm(n, mass_matrix)
         e = norm_gradient(n, mass_matrix)
-        v = np.add(a[i+1],a[i])
-       # v =np.asarray(v)
+        v = np.add(a[i+1][0],a[i][0])
 
         # Add length of line segment to total length
-        l += v
+        l += v * norm(n, mass_matrix)
 
         # Compute next gradient component and update gradient
-        #print u
-        T,P=rotation_matrix.shape
-        print T
-        print P
-        print u*c
-        g.append(rotation_matrix.transpose().dot(u * c - v * e)[1:])
-
+        g.append(rotation_matrix.transpose().dot(a[i][1] * (b + d) +u * c - v * e)[1:])
+#a[i][1] * (b + d) +
         # Pass back calculated values for efficiency
         b = d
         c = e
         u = v
-    print l
-    print len(x)
-    print np.asarray(g).flatten()
+
+       # print l
     return 0.5 * l  , 0.5 * np.asarray(g).flatten()
 
 
@@ -367,7 +387,7 @@ def find_geodesic_midpoint(start_point, end_point, number_of_inner_points, dimen
     """
 
     # Define a function that returns sqrt(2(E-V)) and it's gradient based on a given configuration
-    def metric(point, Q_I_matrix, x_k):
+    def metric(point, Q_I_matrix, x_k,gradient):
 
         # Update molecular configuration based on given configuration
        # molecule.set_positions(convert_vector_to_atoms(point))
@@ -388,8 +408,10 @@ def find_geodesic_midpoint(start_point, end_point, number_of_inner_points, dimen
 
         cf = math.sqrt(max([c, 1E-9]))
 
+        gradient=gradient.flatten()
+
         # Return sqrt(2(E-V)) and it's gradient
-        return [cf]
+        return [cf,gradient/cf]
 
     # Obtain the transformation from dimension dimensional space to the tangent space of the line
     # joining start_point to end_point.
